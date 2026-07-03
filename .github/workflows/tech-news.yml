@@ -1,0 +1,30 @@
+name: Tech briefing
+
+on:
+  schedule:
+    # 01:29 UTC = 06:59 IST. GitHub's cron queue adds a few minutes, so the
+    # message lands ~07:00–07:15 IST. Odd minute avoids top-of-hour cron
+    # congestion.
+    - cron: '29 1 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run briefing
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python tech_news.py
