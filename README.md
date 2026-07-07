@@ -7,8 +7,8 @@ summarized into a sectioned briefing (AI / SOFTWARE & DEV / HARDWARE /
 INDUSTRY / SECURITY) — each story with what happened, why it matters,
 and a link.
 
-Same pattern as the other personal agents (`[feeds] → [summarize] → [Telegram]`);
-full fleet reference lives in `~/Desktop/morning-mail-setup.md` on the laptop.
+Part of the personal-agents fleet (`[feeds] → [summarize] → [Telegram]`):
+one agent, one task, one bot — `@jayanth_tech_briefing_bot`.
 
 - Schedule: `.github/workflows/tech-news.yml` (`29 1 * * *` UTC = 06:59 IST)
 - Feeds: `FEEDS` dict in `tech_news.py`
