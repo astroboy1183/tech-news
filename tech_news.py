@@ -3,8 +3,8 @@
 
 One detailed Telegram message every morning (~7:00 IST via GitHub Actions):
 the last 24h of tech news across AI, software & dev, hardware, industry and
-security — each story summarized by Claude with what happened, why it
-matters, and a link.
+security — each story summarized with what happened, why it matters, and
+a link.
 
 Separate from the 6 AM morning briefing (morning-mail repo): own repo, own
 bot, own schedule — it fails and gets fixed independently.
@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 import feedparser
 from dotenv import load_dotenv
 
-from agentlib import ask_claude, send_telegram
+from agentlib import ask_llm, send_telegram
 
 BASE_DIR = Path(__file__).resolve().parent
 IST = ZoneInfo("Asia/Kolkata")
@@ -43,7 +43,7 @@ FEEDS = {
     ],
 }
 ENTRIES_PER_FEED = 12
-SUMMARY_CHARS = 300  # per entry; keeps the Claude prompt sane
+SUMMARY_CHARS = 300  # per entry; keeps the prompt size sane
 LOOKBACK_HOURS = 24
 
 TAG_RE = re.compile(r"<[^>]+>")
@@ -88,7 +88,7 @@ def gather_stories():
 
 
 def summarize(stories):
-    """One Claude call: raw feed entries in, sectioned detailed briefing out."""
+    """One model call: raw feed entries in, sectioned detailed briefing out."""
     blocks = []
     for category, entries in stories.items():
         lines = "\n".join(
@@ -124,7 +124,7 @@ def summarize(stories):
         "- Blank line between stories.\n"
         "- A section with nothing notable: one line saying 'quiet day'."
     )
-    return ask_claude(prompt, max_tokens=4000)
+    return ask_llm(prompt, max_tokens=4000)
 
 
 def main():
