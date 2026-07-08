@@ -51,6 +51,11 @@ happened, why it matters, and a link. One agent, one task, one bot:
   the feeds is briefed exactly once.
 - Tests run in CI on every push (`.github/workflows/tests.yml`).
 
+- **HN significance is measured, not guessed**: Hacker News entries
+  are enriched with points/comments from the Algolia API (exact title
+  match only; failures leave the entry unenriched) and the prompt
+  judges by score.
+
 ## Ops
 
 - Schedule: `.github/workflows/tech-news.yml` (`29 1 * * *` UTC = 06:59 IST; backup 07:59)

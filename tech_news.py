@@ -21,6 +21,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import feedparser
+import requests
 from dotenv import load_dotenv
 
 from agentlib import ask_llm, send_telegram
@@ -82,6 +83,34 @@ LOOKBACK_HOURS = 24
 TAG_RE = re.compile(r"<[^>]+>")
 URL_RE = re.compile(r"https?://\S+")
 
+HN_FEED = "https://news.ycombinator.com/rss"
+
+
+def enrich_hn(stories):
+    """Attach points/comments to Hacker News entries via the Algolia API.
+
+    HN's RSS carries titles only, so significance used to be guessed from
+    the headline alone. Points and comment counts give the model a real
+    signal. Exact title match guards against wrong lookups; any failure
+    leaves the entry unenriched — never worth losing a story over."""
+    for s in stories:
+        try:
+            r = requests.get(
+                "https://hn.algolia.com/api/v1/search",
+                params={"query": s["title"][:80], "tags": "story", "hitsPerPage": 1},
+                timeout=15,
+            )
+            r.raise_for_status()
+            hits = r.json().get("hits", [])
+            if hits and hits[0].get("title", "").lower() == s["title"].lower():
+                s["summary"] = (
+                    f"HN: {hits[0].get('points', 0)} points, "
+                    f"{hits[0].get('num_comments', 0)} comments"
+                )
+        except Exception:
+            continue
+    return stories
+
 
 def clean(html):
     """Strip tags and collapse whitespace — feed summaries arrive as HTML."""
@@ -105,16 +134,20 @@ def gather_stories(seen=frozenset()):
         for url in urls:
             try:
                 feed = feedparser.parse(url)
+                batch = []
                 for e in feed.entries[:ENTRIES_PER_FEED]:
                     if not fresh(e, cutoff) or e.get("link", "") in seen:
                         continue
-                    stories.append(
+                    batch.append(
                         {
                             "title": e.get("title", "(untitled)"),
                             "summary": clean(e.get("summary", ""))[:SUMMARY_CHARS],
                             "link": e.get("link", ""),
                         }
                     )
+                if url == HN_FEED:
+                    enrich_hn(batch)
+                stories += batch
             except Exception:
                 continue  # dead feed → just use the others
         out[category] = stories
@@ -171,8 +204,10 @@ def summarize(stories):
         "line.\n"
         "- INDUSTRY has its own candidates, but also pull any business/"
         "acquisition/regulation stories surfacing in other categories.\n"
-        "- Hacker News entries have no summary — judge by title, include "
-        "only clearly significant ones.\n"
+        "- Hacker News entries carry 'HN: N points, M comments' instead of "
+        "a summary — use the score to judge significance (roughly: 150+ "
+        "notable, 500+ major; below that only if the title is clearly "
+        "important).\n"
         "- Blank line between stories.\n"
         "- A section with nothing notable: one line saying 'quiet day'."
     )
