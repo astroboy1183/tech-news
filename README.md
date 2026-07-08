@@ -46,6 +46,11 @@ happened, why it matters, and a link. One agent, one task, one bot:
 - Two crons + dedupe guard: backup at 07:59 IST delivers only if the
   06:59 primary was dropped or failed (fleet lesson from 2026-07-04).
 
+- **Cross-day memory**: candidate links live in `state/seen.json`
+  (committed back by the workflow) for 3 days, so a story lingering in
+  the feeds is briefed exactly once.
+- Tests run in CI on every push (`.github/workflows/tests.yml`).
+
 ## Ops
 
 - Schedule: `.github/workflows/tech-news.yml` (`29 1 * * *` UTC = 06:59 IST; backup 07:59)

@@ -6,10 +6,15 @@ the last 24h of tech news across AI, software & dev, hardware, industry and
 security — each story summarized with what happened, why it matters, and
 a link.
 
-Separate from the 6 AM morning briefing (morning-mail repo): own repo, own
-bot, own schedule — it fails and gets fixed independently.
+Separate from the 6 AM news briefing: own repo, own bot, own schedule —
+it fails and gets fixed independently.
+
+Cross-day memory (state/seen.json, committed back by the workflow): a
+story that lingers in the feeds for days is only ever briefed once —
+candidate links are remembered for 3 days and filtered out on re-entry.
 """
 
+import json
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -22,6 +27,29 @@ from agentlib import ask_llm, send_telegram
 
 BASE_DIR = Path(__file__).resolve().parent
 IST = ZoneInfo("Asia/Kolkata")
+
+STATE_FILE = BASE_DIR / "state" / "seen.json"
+SEEN_DAYS = 3  # feeds re-serve stories for a day or two; 3 covers weekends
+
+
+def load_seen():
+    """{link: 'YYYY-MM-DD'} of recently briefed candidates, pruned to window.
+
+    Anything fed to the model counts as seen — a story it chose to skip
+    yesterday was not important enough to resurface unchanged today."""
+    try:
+        seen = json.loads(STATE_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=SEEN_DAYS)).strftime(
+        "%Y-%m-%d"
+    )
+    return {k: v for k, v in seen.items() if isinstance(v, str) and v >= cutoff}
+
+
+def save_seen(seen):
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    STATE_FILE.write_text(json.dumps(seen, indent=0, sort_keys=True) + "\n")
 
 # category → feeds; edit here to tune coverage
 FEEDS = {
@@ -68,7 +96,7 @@ def fresh(entry, cutoff):
     return datetime(*stamp[:6], tzinfo=timezone.utc) >= cutoff
 
 
-def gather_stories():
+def gather_stories(seen=frozenset()):
     """{category: [{title, summary, link}, ...]} — failed feeds skipped."""
     cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
     out = {}
@@ -78,7 +106,7 @@ def gather_stories():
             try:
                 feed = feedparser.parse(url)
                 for e in feed.entries[:ENTRIES_PER_FEED]:
-                    if not fresh(e, cutoff):
+                    if not fresh(e, cutoff) or e.get("link", "") in seen:
                         continue
                     stories.append(
                         {
@@ -153,23 +181,34 @@ def summarize(stories):
 
 def main():
     load_dotenv(BASE_DIR / ".env")
-    stories = gather_stories()
+    seen = load_seen()
+    stories = gather_stories(seen)
     scanned = sum(len(v) for v in stories.values())
 
     header = (
         f"🗞 Tech briefing — {datetime.now(IST):%a %d %b %Y}\n"
-        f"(last 24h, {scanned} stories scanned)\n\n"
+        f"(last 24h, {scanned} fresh stories scanned)\n\n"
     )
 
+    known_links = {
+        s["link"] for entries in stories.values() for s in entries if s["link"]
+    }
     if scanned == 0:
-        body = "Quiet day: all tech feeds unreachable ☕"
+        body = "Quiet day: nothing new since yesterday's briefing ☕"
     else:
-        known_links = {
-            s["link"] for entries in stories.values() for s in entries if s["link"]
-        }
         body = validate_links(summarize(stories), known_links)
 
     send_telegram(header + body)
+
+    # Remember what the model was shown — after the send, so a state
+    # failure never costs the briefing itself.
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    for link in known_links:
+        seen[link] = today
+    try:
+        save_seen(seen)
+    except OSError:
+        pass
 
 
 if __name__ == "__main__":
