@@ -37,16 +37,22 @@ FEEDS = {
         "https://www.tomshardware.com/feeds/all",
         "https://www.theverge.com/rss/index.xml",
     ],
+    "Industry": [
+        # Tech business, funding rounds and acquisitions — gives INDUSTRY
+        # its own candidates instead of scavenging the other sections.
+        "https://techcrunch.com/category/venture/feed/",
+    ],
     "Security": [
         "https://feeds.feedburner.com/TheHackersNews",
         "https://www.bleepingcomputer.com/feed/",
     ],
 }
 ENTRIES_PER_FEED = 12
-SUMMARY_CHARS = 300  # per entry; keeps the prompt size sane
+SUMMARY_CHARS = 500  # per entry; keeps the prompt size sane
 LOOKBACK_HOURS = 24
 
 TAG_RE = re.compile(r"<[^>]+>")
+URL_RE = re.compile(r"https?://\S+")
 
 
 def clean(html):
@@ -87,6 +93,24 @@ def gather_stories():
     return out
 
 
+def validate_links(text, known_links):
+    """Neutralize invented URLs: replace any link the model emitted that is
+    not among the gathered story URLs. The model must cite only links we
+    actually fetched — a hallucinated URL is worse than none."""
+
+    def check(match):
+        url = match.group(0)
+        trail = ""
+        while url and url[-1] in ").,;'\"":
+            trail = url[-1] + trail
+            url = url[:-1]
+        if url in known_links:
+            return match.group(0)
+        return "(link unavailable)" + trail
+
+    return URL_RE.sub(check, text)
+
+
 def summarize(stories):
     """One model call: raw feed entries in, sectioned detailed briefing out."""
     blocks = []
@@ -117,8 +141,8 @@ def summarize(stories):
         "- Each story: a headline line, then 1–2 sentences of detail — what "
         "actually happened and why it matters — then the link on its own "
         "line.\n"
-        "- INDUSTRY has no candidate block of its own: pull business/"
-        "acquisition/regulation stories from any category's candidates.\n"
+        "- INDUSTRY has its own candidates, but also pull any business/"
+        "acquisition/regulation stories surfacing in other categories.\n"
         "- Hacker News entries have no summary — judge by title, include "
         "only clearly significant ones.\n"
         "- Blank line between stories.\n"
@@ -140,7 +164,10 @@ def main():
     if scanned == 0:
         body = "Quiet day: all tech feeds unreachable ☕"
     else:
-        body = summarize(stories)
+        known_links = {
+            s["link"] for entries in stories.values() for s in entries if s["link"]
+        }
+        body = validate_links(summarize(stories), known_links)
 
     send_telegram(header + body)
 
