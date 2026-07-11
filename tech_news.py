@@ -4,7 +4,7 @@
 Two Telegram editions a day via GitHub Actions, from 45 verified feeds
 plus three structured APIs (Hacker News/Algolia, CISA KEV, GitHub search):
 
-  morning (~6:59 IST) — the full briefing
+  morning (6:00 IST)  — the full briefing
   evening (19:15 IST) — a tight wrap of what broke SINCE the morning
                         (seen-memory guarantees zero overlap); silent
                         unless there's real news or a new exploited CVE
@@ -157,7 +157,7 @@ FEEDS = {
 ENTRIES_PER_FEED = 10
 SNIPPET_CHARS = 250
 LOOKBACK_HOURS = 24
-EVENING_LOOKBACK_HOURS = 14  # 6:59 → 19:15 plus margin; seen-memory
+EVENING_LOOKBACK_HOURS = 14  # 6:00 → 19:15 plus margin; seen-memory
                              # already blocks what the morning carried
 
 # Two-stage bullets: a cheap model SELECTS from ~450 candidates, the code

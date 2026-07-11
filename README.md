@@ -4,7 +4,7 @@ The fleet's flagship: a comprehensive tech briefing → Telegram, two
 editions a day via GitHub Actions. One agent, one task, one bot:
 `@jayanth_tech_briefing_bot`.
 
-- **~06:59 IST** — the full morning briefing
+- **06:00 IST** — the full morning briefing
 - **19:15 IST** — a tight *evening wrap* of what broke AFTER the morning
   (the seen-memory guarantees zero overlap); silent unless there's real
   news — or a newly exploited CVE, which never waits

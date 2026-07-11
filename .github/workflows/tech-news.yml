@@ -6,9 +6,9 @@ on:
     # or drops schedule events under load — 2026-07-04: a primary cron
     # never fired at all; the guard step pairs each backup with its own
     # edition's primary). Odd minutes avoid top-of-hour cron congestion.
-    # Morning briefing: 01:29 UTC = 06:59 IST; backup 07:59.
-    - cron: '29 1 * * *'
-    - cron: '29 2 * * *'
+    # Morning briefing: 00:30 UTC = 06:00 IST; backup 07:00.
+    - cron: '30 0 * * *'
+    - cron: '30 1 * * *'
     # Evening wrap: 13:45 UTC = 19:15 IST; backup 20:15.
     - cron: '45 13 * * *'
     - cron: '45 14 * * *'
