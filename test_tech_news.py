@@ -2,7 +2,7 @@
 """Offline tests for tech_news — no network, no API keys required.
 
 Covers link validation, the state-tail parser, editions, the watchlist
-guarantee, the deterministic HN/KEV/repos blocks (stubbed network), the
+guarantee, the deterministic HN/KEV blocks (stubbed network), the
 photo helpers and the week-in-review gate."""
 
 import json
@@ -177,24 +177,6 @@ class KevBlockTest(unittest.TestCase):
             self.assertEqual(tn.kev_block({}), ("", {}))
 
 
-class RisingReposTest(unittest.TestCase):
-    def _repo(self, name, stars=500):
-        return {"full_name": name, "stargazers_count": stars,
-                "description": "d", "html_url": f"https://github.com/{name}"}
-
-    def test_new_repos_shown_shown_repos_skipped(self):
-        payload = {"items": [self._repo("a/one"), self._repo("b/two")]}
-        with mock.patch.object(tn.requests, "get", return_value=_resp(payload)):
-            text, new = tn.rising_repos(shown={"a/one": "2026-07-10"})
-        self.assertNotIn("a/one", text)
-        self.assertIn("b/two", text)
-        self.assertEqual(list(new), ["b/two"])
-
-    def test_api_failure_is_quiet(self):
-        with mock.patch.object(tn.requests, "get", side_effect=OSError("x")):
-            self.assertEqual(tn.rising_repos({}), ("", {}))
-
-
 class ExtrasMemoryTest(unittest.TestCase):
     def test_prunes_old_entries(self):
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -203,13 +185,11 @@ class ExtrasMemoryTest(unittest.TestCase):
             tn.STATE_DIR = Path(tmp)
             tn.EXTRAS_FILE = Path(tmp) / "extras.json"
             try:
-                tn.save_extras({"kev": {"CVE-N": today, "CVE-O": "2020-01-01"},
-                                "repos": {"a/b": today, "c/d": "2020-01-01"}})
+                tn.save_extras({"kev": {"CVE-N": today, "CVE-O": "2020-01-01"}})
                 extras = tn.load_extras()
             finally:
                 tn.STATE_DIR, tn.EXTRAS_FILE = saved_dir, saved_file
         self.assertEqual(list(extras["kev"]), ["CVE-N"])
-        self.assertEqual(list(extras["repos"]), ["a/b"])
 
 
 class PhotoTest(unittest.TestCase):

@@ -24,20 +24,20 @@ well-established facts only.
                                                page (the article's own
                                                og:image, captioned)
 
-🤖 AI — 5             (TC AI, VentureBeat AI + PRIMARY sources: OpenAI,
+🤖 AI — up to 10      (TC AI, VentureBeat AI + PRIMARY sources: OpenAI,
                        DeepMind, Google AI, HuggingFace, MIT Tech Review,
                        Simon Willison)
-📊 DATA — 4           (data eng/science/analytics: Towards Data Science,
+📊 DATA — up to 10    (data eng/science/analytics: Towards Data Science,
                        KDnuggets, Data Engineering Weekly, Seattle Data
                        Guy, InfoWorld)
-☁️ INFRA — 4          (The New Stack, Kubernetes blog, CNCF, AWS News,
+☁️ INFRA — up to 10   (The New Stack, Kubernetes blog, CNCF, AWS News,
                        GCP, Azure, DevOps.com — the news lens; vendor
                        engineering blogs belong to the eng-blogs agent)
-🖥 OS — 4             (Windows: Neowin, WindowsLatest · Linux: Phoronix,
+🖥 OS — up to 10      (Windows: Neowin, WindowsLatest · Linux: Phoronix,
                        OMG Ubuntu, LWN · macOS: 9to5Mac, MacRumors —
                        selector told to mix all three OSes)
+🔩 HARDWARE — up to 10 (Tom's, Verge, ServeTheHome)
 💻 SOFTWARE & DEV — 3 (HN, Ars, Lobsters, GitHub blog, InfoQ)
-🔩 HARDWARE — 3       (Tom's, Verge, ServeTheHome)
 🏢 INDUSTRY — 2       (TC Venture, TC main, The Register)
 🇮🇳 INDIA TECH — 2     (Inc42, MediaNama, YourStory)
 🔐 SECURITY — 3       (Hacker News/THN, BleepingComputer, Krebs, Schneier)
@@ -46,8 +46,6 @@ well-established facts only.
                       Algolia API — the community's actual front page,
                       verbatim titles + points/comments + article and
                       discussion links, no model judgment
-📈 RISING REPOS       new GitHub repos crossing ★300 this week (search
-                      API), never repeated (extras memory)
 🚨 PATCH NOW          new entries in CISA's Known Exploited
                       Vulnerabilities catalog — actively exploited in
                       the wild, with NVD links and patch-due dates;
@@ -65,7 +63,7 @@ the 👁 prefix. Change anytime with `gh secret set TECH_WATCH`.
 
 Bullets are written from the ARTICLES, not the headlines — a two-stage
 pipeline: a cheap model (`TECH_MODEL_SELECT`, default haiku) picks from
-~350 candidates, the code fetches full article text for just those
+~450 candidates (the five core topics — AI, data, infra, OS, hardware — run up to 10 stories deep), the code fetches full article text for just those
 (boilerplate-stripped, 3k chars; paywalls fall back to the snippet), and
 a stronger model (`TECH_MODEL_WRITE`, default sonnet) writes bullets
 with version numbers, benchmarks and consequences — each with its
@@ -94,9 +92,6 @@ validated source link.
   official short description, patch-due date and its NVD link. Runs in
   BOTH editions. Entirely deterministic — no model touches the one block
   where a wrong detail could hurt.
-- **`rising_repos(shown)`** — GitHub search (workflow's own token) for
-  repos created this week already past ★300; the extras memory ensures
-  a repo is shown exactly once.
 - **`gather_stories(seen, lookback, hn_scores)`** — per-feed try/except,
   freshness filter, seen-memory dedupe, watchlist 👁-flagging.
 - **`select_stories(...)`** — stage 1 (haiku): picks indices per
@@ -117,7 +112,7 @@ validated source link.
 - **`week_in_review`** — Saturday mornings, traces arcs from the 7-day
   briefed memory; `NONE` sentinel when no real arcs exist.
 - **`main()`** — edition → HN window → gather → KEV → select → fetch →
-  write → validate → assemble (body + 🔥 + 📈 + 🚨 + 🗓) → photo → send →
+  write → validate → assemble (body + 🔥 + 🚨 + 🗓) → photo → send →
   save state (AFTER the send, so a state failure never costs the
   message).
 
@@ -127,7 +122,7 @@ validated source link.
 |---|---|---|
 | `state/seen.json` | candidate links shown to the model | 3 days |
 | `state/briefed.json` | what the bullets actually said | 7 days |
-| `state/extras.json` | KEV CVEs + repos already surfaced | 90/60 days |
+| `state/extras.json` | KEV CVEs already surfaced | 90 days |
 
 ## Design notes
 
@@ -139,6 +134,8 @@ validated source link.
 - The watchlist guarantee is code-enforced (mail-digest VIP pattern).
 - HN significance is measured (Algolia points), and 🔥 HN TOP is fully
   deterministic — the model neither picks nor rewrites it.
+- 📈 RISING REPOS moved to the repo-review agent — repos are its beat;
+  one agent, one task.
 - Tests run in CI on every push (`.github/workflows/tests.yml`).
 
 ## Ops
@@ -148,6 +145,5 @@ validated source link.
   uses a **3-hour window** so each backup pairs with its own edition.
 - Run now: `gh workflow run tech-news.yml -R astroboy1183/tech-news`
 - Secrets (Actions): `ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN`,
-  `TELEGRAM_CHAT_ID`, `TECH_WATCH` (optional watchlist); the rising-repos
-  search uses the workflow's own `github.token`.
+  `TELEGRAM_CHAT_ID`, `TECH_WATCH` (optional watchlist).
 - Local test: `cd ~/agents/tech_news && <any fleet venv>/bin/python tech_news.py`

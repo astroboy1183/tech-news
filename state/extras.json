@@ -6,13 +6,5 @@
   "CVE-2026-55255": "2026-07-07",
   "CVE-2026-56290": "2026-07-07",
   "CVE-2026-56291": "2026-07-10"
- },
- "repos": {
-  "514-labs/dnsglobe": "2026-07-11",
-  "MaximeRivest/riddle": "2026-07-11",
-  "Robbyant/lingbot-world-v2": "2026-07-11",
-  "Shpigford/knockoff": "2026-07-11",
-  "simonlin1212/Vibe-Research": "2026-07-11",
-  "withmarbleapp/os-taxonomy": "2026-07-11"
  }
 }

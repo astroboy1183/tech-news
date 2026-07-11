@@ -12,7 +12,9 @@ plus three structured APIs (Hacker News/Algolia, CISA KEV, GitHub search):
 Every bullet is DETAILED: what happened (concrete facts from the fetched
 article) plus a "↳" background-context line situating the story — prior
 developments, why now — drawn from the article, the briefed memory and
-well-established facts only, never speculation.
+well-established facts only, never speculation. The five core topics
+(AI, data, infra, OS, hardware) run up to 10 stories deep every
+morning; the supporting sections stay tight.
 
   🗞 Top             — the day's biggest tech story (sent as a photo
                         front page when the article carries an og:image)
@@ -34,8 +36,6 @@ well-established facts only, never speculation.
 
   🔥 HN TOP          — deterministic: the community's actual front page,
                         top-5 by points in the window (Algolia API)
-  📈 RISING REPOS    — deterministic: new GitHub repos crossing a star
-                        threshold this week, never repeated
   🚨 PATCH NOW       — deterministic tripwire: new entries in CISA's
                         Known Exploited Vulnerabilities catalog — if it's
                         here, someone is exploiting it in the wild NOW
@@ -50,8 +50,11 @@ personal watchlist: matching stories are always selected and 👁-flagged.
 Three memories (state/, committed back by the workflow):
   seen.json    — candidate links shown to the model, 3 days
   briefed.json — what the bullets actually SAID, 7 days
-  extras.json  — KEV CVEs and rising repos already surfaced, so the
-                 deterministic blocks never repeat themselves
+  extras.json  — KEV CVEs already surfaced, so the tripwire never
+                 repeats itself
+
+(Rising GitHub repos moved to the repo-review agent — repos are its
+beat; one agent, one task.)
 
 Hard failures raise and land in the Actions log; the deterministic
 blocks are enrichments and can never sink the briefing.
@@ -151,22 +154,24 @@ FEEDS = {
         "https://www.schneier.com/feed/atom/",
     ],
 }
-ENTRIES_PER_FEED = 8
+ENTRIES_PER_FEED = 10
 SNIPPET_CHARS = 250
 LOOKBACK_HOURS = 24
 EVENING_LOOKBACK_HOURS = 14  # 6:59 → 19:15 plus margin; seen-memory
                              # already blocks what the morning carried
 
-# Two-stage bullets: a cheap model SELECTS from ~350 candidates, the code
+# Two-stage bullets: a cheap model SELECTS from ~450 candidates, the code
 # fetches full articles for just the chosen few, a stronger model WRITES
-# from real article text.
+# from real article text. The five core topics run DEEP — up to 10
+# stories each; the supporting sections stay tight so the briefing has
+# depth where it matters without drowning the rest.
 SECTION_CAPS = {  # morning, the full briefing
-    "ai": 5, "data": 4, "infra": 4, "os": 4, "dev": 3,
-    "hardware": 3, "industry": 2, "india": 2, "security": 3,
+    "ai": 10, "data": 10, "infra": 10, "os": 10, "hardware": 10,
+    "dev": 3, "industry": 2, "india": 2, "security": 3,
 }
-EVENING_CAPS = {  # the wrap stays tight — Top + ~11 bullets
-    "ai": 2, "data": 2, "infra": 1, "os": 1, "dev": 1,
-    "hardware": 1, "industry": 1, "india": 1, "security": 1,
+EVENING_CAPS = {  # the wrap stays tighter — Top + ~14 bullets
+    "ai": 3, "data": 2, "infra": 2, "os": 2, "hardware": 1,
+    "dev": 1, "industry": 1, "india": 1, "security": 1,
 }
 WATCH_EXTRA = 2        # watchlist stories forced in per section, at most
 ARTICLE_CHARS = 3000
@@ -183,11 +188,6 @@ KEV_URL = ("https://www.cisa.gov/sites/default/files/feeds/"
 KEV_WINDOW_DAYS = 7    # only recently added CVEs are news
 KEV_CAP = 5
 KEV_KEEP_DAYS = 90     # prune remembered CVEs after this
-REPO_API = "https://api.github.com/search/repositories"
-REPO_MIN_STARS = 300
-REPO_WINDOW_DAYS = 7
-REPO_CAP = 3
-REPO_KEEP_DAYS = 60
 
 TAG_RE = re.compile(r"<[^>]+>")
 URL_RE = re.compile(r"https?://\S+")
@@ -275,22 +275,19 @@ def save_briefed(briefed):
 
 
 def load_extras():
-    """{"kev": {cveID: dateAdded}, "repos": {full_name: date shown}} —
-    what the deterministic blocks already surfaced, pruned to windows."""
+    """{"kev": {cveID: dateAdded}} — what the tripwire already surfaced,
+    pruned to its window."""
     try:
         extras = json.loads(EXTRAS_FILE.read_text())
     except (OSError, ValueError):
         extras = {}
-    now = datetime.now(timezone.utc)
-    kev_cut = (now - timedelta(days=KEV_KEEP_DAYS)).strftime("%Y-%m-%d")
-    repo_cut = (now - timedelta(days=REPO_KEEP_DAYS)).strftime("%Y-%m-%d")
+    kev_cut = (
+        datetime.now(timezone.utc) - timedelta(days=KEV_KEEP_DAYS)
+    ).strftime("%Y-%m-%d")
     kev = extras.get("kev", {})
-    repos = extras.get("repos", {})
     return {
         "kev": {k: v for k, v in kev.items()
                 if isinstance(v, str) and v >= kev_cut},
-        "repos": {k: v for k, v in repos.items()
-                  if isinstance(v, str) and v >= repo_cut},
     }
 
 
@@ -412,50 +409,6 @@ def kev_block(known):
     return "\n".join(lines), {v["cveID"]: v.get("dateAdded", "") for v in new}
 
 
-def rising_repos(shown):
-    """📈 RISING REPOS — new GitHub repos crossing REPO_MIN_STARS this week.
-
-    Deterministic (GitHub search API, GITHUB_TOKEN used when present),
-    never repeats a repo thanks to the extras memory. Returns
-    (block text, {full_name: date} of newly shown). ('', {}) when quiet."""
-    try:
-        since = (
-            datetime.now(timezone.utc) - timedelta(days=REPO_WINDOW_DAYS)
-        ).strftime("%Y-%m-%d")
-        headers = {"Accept": "application/vnd.github+json"}
-        token = os.environ.get("GITHUB_TOKEN", "")
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        r = requests.get(
-            REPO_API,
-            params={
-                "q": f"created:>{since} stars:>{REPO_MIN_STARS}",
-                "sort": "stars",
-                "order": "desc",
-                "per_page": 10,
-            },
-            headers=headers,
-            timeout=FETCH_TIMEOUT,
-        )
-        r.raise_for_status()
-        items = r.json().get("items", [])
-    except Exception:
-        return "", {}
-    fresh_repos = [i for i in items if i.get("full_name") not in shown][:REPO_CAP]
-    if not fresh_repos:
-        return "", {}
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    lines = ["📈 RISING REPOS — new this week"]
-    for i in fresh_repos:
-        desc = " ".join((i.get("description") or "").split())[:100]
-        lines.append(
-            f"• {i['full_name']} ★{i.get('stargazers_count', 0)}"
-            + (f" — {desc}" if desc else "")
-        )
-        lines.append(f"  {i.get('html_url', '')}")
-    return "\n".join(lines), {i["full_name"]: today for i in fresh_repos}
-
-
 def gather_stories(seen=frozenset(), lookback=LOOKBACK_HOURS, hn_scores=None):
     """{category: [{title, summary, link}, ...]} — failed feeds skipped.
 
@@ -565,7 +518,7 @@ def select_stories(stories, briefed, model, caps):
         "genuine development.\n\n"
         "Output ONLY one JSON object mapping category name to an array "
         'of chosen indices, e.g. {"ai": [0, 4], "dev": [2]}. No prose.',
-        max_tokens=500,
+        max_tokens=900,
         model=model,
     )
     try:
@@ -711,7 +664,7 @@ def write_briefing(selected, briefed, model, caps, ed="morning"):
         '"top_link": the LINK of the story your Top line describes}. '
         "No text after the JSON."
     )
-    return ask_llm(prompt, max_tokens=8000, model=model)
+    return ask_llm(prompt, max_tokens=16000, model=model)
 
 
 def week_in_review(briefed, model):
@@ -803,14 +756,10 @@ def main():
     # (their URLs are fetched, not model-emitted). Morning gets the full
     # set; the evening wrap carries only the tripwire.
     parts = [body]
-    repos_new = {}
     if ed == "morning":
         block = hn_block(hn)
         if block:
             parts.append(block)
-        repos_text, repos_new = rising_repos(extras["repos"])
-        if repos_text:
-            parts.append(repos_text)
     if kev_text:
         parts.append(kev_text)
     if ed == "morning" and now.weekday() == 5:  # Saturday
@@ -842,7 +791,6 @@ def main():
         briefed.setdefault(today, [])
         briefed[today] += briefed_today
     extras["kev"].update(kev_new)
-    extras["repos"].update(repos_new)
     try:
         save_seen(seen)
         save_briefed(briefed)

@@ -76,7 +76,6 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TECH_WATCH: ${{ secrets.TECH_WATCH }}
-          GITHUB_TOKEN: ${{ github.token }}  # rising-repos search rate limit
         run: python tech_news.py
 
 
