@@ -9,12 +9,16 @@ editions a day via GitHub Actions. One agent, one task, one bot:
   (the seen-memory guarantees zero overlap); silent unless there's real
   news — or a newly exploited CVE, which never waits
 
-Twenty-nine verified feeds + three structured APIs (Hacker News/Algolia,
-CISA KEV, GitHub search), seven sections plus four deterministic blocks:
+Forty-five verified feeds + three structured APIs (Hacker News/Algolia,
+CISA KEV, GitHub search), nine sections plus four deterministic blocks.
+**Every bullet is detailed**: 2-3 sentences of what happened (from the
+fetched article) plus a `↳` background-context line — prior
+developments, why now — drawn from the article, the briefed memory and
+well-established facts only.
 
 ```
 🗞 Tech briefing — Sat 11 Jul
-214 fresh stories · 29 feeds + HN/KEV/GitHub
+230 fresh stories · 45 feeds + HN/KEV/GitHub
 
 🗞 Top: <the day's biggest tech story>       ← also sent as a PHOTO front
                                                page (the article's own
@@ -23,12 +27,19 @@ CISA KEV, GitHub search), seven sections plus four deterministic blocks:
 🤖 AI — 5             (TC AI, VentureBeat AI + PRIMARY sources: OpenAI,
                        DeepMind, Google AI, HuggingFace, MIT Tech Review,
                        Simon Willison)
-🛠 DATA & INFRA — 4   (The New Stack, InfoWorld — the news lens; vendor
+📊 DATA — 4           (data eng/science/analytics: Towards Data Science,
+                       KDnuggets, Data Engineering Weekly, Seattle Data
+                       Guy, InfoWorld)
+☁️ INFRA — 4          (The New Stack, Kubernetes blog, CNCF, AWS News,
+                       GCP, Azure, DevOps.com — the news lens; vendor
                        engineering blogs belong to the eng-blogs agent)
-💻 SOFTWARE & DEV — 4 (HN, Ars, Lobsters, GitHub blog, InfoQ, Phoronix)
+🖥 OS — 4             (Windows: Neowin, WindowsLatest · Linux: Phoronix,
+                       OMG Ubuntu, LWN · macOS: 9to5Mac, MacRumors —
+                       selector told to mix all three OSes)
+💻 SOFTWARE & DEV — 3 (HN, Ars, Lobsters, GitHub blog, InfoQ)
 🔩 HARDWARE — 3       (Tom's, Verge, ServeTheHome)
-🏢 INDUSTRY — 3       (TC Venture, TC main, The Register)
-🇮🇳 INDIA TECH — 3     (Inc42, MediaNama, YourStory)
+🏢 INDUSTRY — 2       (TC Venture, TC main, The Register)
+🇮🇳 INDIA TECH — 2     (Inc42, MediaNama, YourStory)
 🔐 SECURITY — 3       (Hacker News/THN, BleepingComputer, Krebs, Schneier)
 
 🔥 HN TOP             top-5 by points in the window, straight from the
@@ -54,7 +65,7 @@ the 👁 prefix. Change anytime with `gh secret set TECH_WATCH`.
 
 Bullets are written from the ARTICLES, not the headlines — a two-stage
 pipeline: a cheap model (`TECH_MODEL_SELECT`, default haiku) picks from
-~240 candidates, the code fetches full article text for just those
+~350 candidates, the code fetches full article text for just those
 (boilerplate-stripped, 3k chars; paywalls fall back to the snippet), and
 a stronger model (`TECH_MODEL_WRITE`, default sonnet) writes bullets
 with version numbers, benchmarks and consequences — each with its
@@ -64,11 +75,12 @@ validated source link.
 
 `tech_news.py`, in pipeline order:
 
-- **`FEEDS`** — `{category: [feed urls]}`, 29 sources, every one probed
+- **`FEEDS`** — `{category: [feed urls]}`, 45 sources, every one probed
   for reachability + freshness before inclusion (the header comment
-  documents the rejects: Anthropic/Meta AI/Entrackr 404, Datanami dead,
-  Changelog podcast-only…). Data-vendor engineering blogs are
-  deliberately absent — eng-blogs owns them; DATA & INFRA here is news.
+  documents ~13 rejects: Anthropic/Meta AI/Windows blog/9to5Linux
+  dead or 403, Thurrott too general, Changelog podcast-only…).
+  Data-vendor engineering blogs are deliberately absent — eng-blogs
+  owns them; DATA and INFRA here are the news/practitioner lens.
 - **`edition(now)`** — morning (full `SECTION_CAPS`, 24h lookback) or
   evening (tight `EVENING_CAPS`, 14h) by IST hour.
 - **`hn_window(hours)`** — ONE Algolia call serving two purposes: the

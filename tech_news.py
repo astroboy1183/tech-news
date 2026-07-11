@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tech briefing — the fleet's flagship.
 
-Two Telegram editions a day via GitHub Actions, from 29 verified feeds
+Two Telegram editions a day via GitHub Actions, from 45 verified feeds
 plus three structured APIs (Hacker News/Algolia, CISA KEV, GitHub search):
 
   morning (~6:59 IST) — the full briefing
@@ -9,14 +9,23 @@ plus three structured APIs (Hacker News/Algolia, CISA KEV, GitHub search):
                         (seen-memory guarantees zero overlap); silent
                         unless there's real news or a new exploited CVE
 
+Every bullet is DETAILED: what happened (concrete facts from the fetched
+article) plus a "↳" background-context line situating the story — prior
+developments, why now — drawn from the article, the briefed memory and
+well-established facts only, never speculation.
+
   🗞 Top             — the day's biggest tech story (sent as a photo
                         front page when the article carries an og:image)
   🤖 AI              — models, products, research, policy; primary
                         sources (OpenAI, DeepMind, Google, HuggingFace)
                         next to the trade press
-  🛠 DATA & INFRA    — data platforms, pipelines, databases, cloud infra
-                        (the NEWS lens; vendor engineering blogs belong
-                        to the eng-blogs agent)
+  📊 DATA            — data engineering, data science, analytics: the
+                        practitioner press (TDS, KDnuggets, DE Weekly)
+  ☁️ INFRA           — cloud platforms, Kubernetes, DevOps, SRE (the
+                        NEWS lens; vendor engineering blogs belong to
+                        the eng-blogs agent)
+  🖥 OS              — Windows, Linux, macOS: releases, features, EOLs,
+                        breaking changes
   💻 SOFTWARE & DEV  — releases, frameworks, open source, dev tools
   🔩 HARDWARE        — chips, GPUs, devices, servers
   🏢 INDUSTRY        — big-tech business, funding, acquisitions, regulation
@@ -65,13 +74,15 @@ from agentlib import ask_llm, send_telegram
 BASE_DIR = Path(__file__).resolve().parent
 IST = ZoneInfo("Asia/Kolkata")
 
-# category → feeds. Every URL verified before inclusion (probe sweep
+# category → feeds. Every URL verified before inclusion (probe sweeps
 # 11 Jul 2026). Tested and REJECTED: Anthropic + Meta AI + Entrackr +
-# Register/databases (404), Datanami + BigDATAwire (dead domains),
-# Changelog (podcast feed, no fresh news items). Data-vendor engineering
-# blogs (Databricks, Snowflake, dbt, Confluent, DuckDB, AWS Big Data)
-# are deliberately ABSENT — the eng-blogs agent already covers them;
-# DATA & INFRA here is the news lens, not the blog lens.
+# Register/databases + Windows Central + Analytics India Mag (404/empty),
+# Windows blog + 9to5Linux (403), Datanami + BigDATAwire (dead domains),
+# VentureBeat/data (empty), Changelog (podcast feed), Thurrott (too much
+# general-media filler). Data-vendor engineering blogs (Databricks,
+# Snowflake, dbt, Confluent, DuckDB, AWS Big Data) are deliberately
+# ABSENT — the eng-blogs agent already covers them; DATA and INFRA here
+# are the news/practitioner lens, not the vendor-blog lens.
 FEEDS = {
     "ai": [
         "https://techcrunch.com/category/artificial-intelligence/feed/",
@@ -84,8 +95,32 @@ FEEDS = {
         "https://simonwillison.net/atom/everything/",
     ],
     "data": [
-        "https://thenewstack.io/feed/",
+        "https://towardsdatascience.com/feed",
+        "https://www.kdnuggets.com/feed",
+        "https://www.dataengineeringweekly.com/feed",
+        "https://seattledataguy.substack.com/feed",
         "https://www.infoworld.com/feed/",
+    ],
+    "infra": [
+        "https://thenewstack.io/feed/",
+        "https://kubernetes.io/feed.xml",
+        "https://www.cncf.io/feed/",
+        "https://aws.amazon.com/blogs/aws/feed/",
+        "https://cloudblog.withgoogle.com/rss/",
+        "https://azure.microsoft.com/en-us/blog/feed/",
+        "https://devops.com/feed/",
+    ],
+    "os": [
+        # Windows
+        "https://www.neowin.net/news/rss/",
+        "https://www.windowslatest.com/feed/",
+        # Linux
+        "https://www.phoronix.com/rss.php",
+        "https://www.omgubuntu.co.uk/feed",
+        "https://lwn.net/headlines/rss",
+        # macOS
+        "https://9to5mac.com/feed/",
+        "https://feeds.macrumors.com/MacRumors-All",
     ],
     "dev": [
         "https://news.ycombinator.com/rss",
@@ -93,7 +128,6 @@ FEEDS = {
         "https://lobste.rs/rss",
         "https://github.blog/feed/",
         "https://feeds.feedburner.com/InfoQ",
-        "https://www.phoronix.com/rss.php",
     ],
     "hardware": [
         "https://www.tomshardware.com/feeds/all",
@@ -123,16 +157,16 @@ LOOKBACK_HOURS = 24
 EVENING_LOOKBACK_HOURS = 14  # 6:59 → 19:15 plus margin; seen-memory
                              # already blocks what the morning carried
 
-# Two-stage bullets: a cheap model SELECTS from ~240 candidates, the code
+# Two-stage bullets: a cheap model SELECTS from ~350 candidates, the code
 # fetches full articles for just the chosen few, a stronger model WRITES
 # from real article text.
 SECTION_CAPS = {  # morning, the full briefing
-    "ai": 5, "data": 4, "dev": 4, "hardware": 3,
-    "industry": 3, "india": 3, "security": 3,
+    "ai": 5, "data": 4, "infra": 4, "os": 4, "dev": 3,
+    "hardware": 3, "industry": 2, "india": 2, "security": 3,
 }
-EVENING_CAPS = {  # the wrap stays tight — Top + ~8 bullets
-    "ai": 2, "data": 1, "dev": 1, "hardware": 1,
-    "industry": 1, "india": 1, "security": 1,
+EVENING_CAPS = {  # the wrap stays tight — Top + ~11 bullets
+    "ai": 2, "data": 2, "infra": 1, "os": 1, "dev": 1,
+    "hardware": 1, "industry": 1, "india": 1, "security": 1,
 }
 WATCH_EXTRA = 2        # watchlist stories forced in per section, at most
 ARTICLE_CHARS = 3000
@@ -515,8 +549,14 @@ def select_stories(stories, briefed, model, caps):
         "- Vary outlets within a category — one outlet must not fill it.\n"
         "- 'HN: N points' entries: judge by score — 150+ notable, 500+ "
         "major; unscored HN titles only if clearly important.\n"
-        "- data = data platforms, databases, pipelines, cloud "
-        "infrastructure; dev = languages, frameworks, releases, tooling.\n"
+        "- data = data engineering, data science, analytics — pipelines, "
+        "warehouses, ML ops, BI; prefer stories with technique or tooling "
+        "substance over listicles.\n"
+        "- infra = cloud platforms, Kubernetes, DevOps, SRE, networking.\n"
+        "- os = Windows, Linux and macOS — releases, features, EOLs, "
+        "breaking changes; prefer a MIX across the three OSes when "
+        "candidates allow, and skip pure consumer-gadget chatter.\n"
+        "- dev = languages, frameworks, releases, tooling.\n"
         "- india = Indian startup/policy/tech-business news with "
         "substance; skip press-release fluff.\n"
         "- security = what a practitioner should KNOW or ACT on; skip "
@@ -632,23 +672,32 @@ def write_briefing(selected, briefed, model, caps, ed="morning"):
     prompt = (
         f"{intro} from pre-selected stories, each with article text where "
         "it could be fetched. I am a data & AI engineer in Hyderabad. Be "
-        "terse and substantive — version numbers, benchmarks, prices, "
-        "names. Plain text only — no markdown headers or bold.\n\n"
+        "detailed and substantive — version numbers, benchmarks, prices, "
+        "names — never padded. Plain text only — no markdown headers or "
+        "bold.\n\n"
         + "\n\n".join(blocks)
         + "\n\n=== RECENTLY BRIEFED (last days — already covered) ===\n"
         + ("\n".join(f"- {k}" for k in recently) or "(none)")
-        + "\n\nProduce EXACTLY this output structure (DATA input becomes "
-        "the 🛠 section, DEV becomes 💻, INDIA becomes 🇮🇳):\n\n"
+        + "\n\nProduce EXACTLY this output structure (DEV input becomes "
+        "the 💻 section, INDIA becomes 🇮🇳):\n\n"
         "🗞 Top: <the single biggest tech story, one line — broadest "
         "consequence for working engineers wins>\n\n"
-        "🤖 AI\n🛠 DATA & INFRA\n💻 SOFTWARE & DEV\n🔩 HARDWARE\n"
+        "🤖 AI\n📊 DATA\n☁️ INFRA\n🖥 OS\n💻 SOFTWARE & DEV\n🔩 HARDWARE\n"
         "🏢 INDUSTRY\n🇮🇳 INDIA TECH\n🔐 SECURITY\n\n"
         "Rules:\n"
-        "- Each bullet: a headline line, then 1-2 sentences of real "
-        "substance drawn from TEXT — what actually happened and why it "
-        "matters to a practitioner — then the story's LINK on its own "
-        "line. Where TEXT is missing, stay conservative: report the "
-        "headline fact, never invent detail.\n"
+        "- Each bullet: a headline line, then 2-3 sentences of real "
+        "substance drawn from TEXT — what actually happened, with the "
+        "concrete facts (versions, benchmarks, prices, names) and why it "
+        "matters to a practitioner.\n"
+        "- Then a background-context line starting with '↳ ': 1-2 "
+        "sentences situating the story — what led to it, prior "
+        "developments (use RECENTLY BRIEFED where a story continues), "
+        "how it fits the larger picture. ONLY well-established "
+        "background — no speculation; if you have no real context, omit "
+        "the ↳ line entirely rather than pad.\n"
+        "- Then the story's LINK on its own line. Where TEXT is missing, "
+        "stay conservative: report the headline fact, never invent "
+        "detail.\n"
         "- Start bullets for stories marked 👁 with 👁 — they hit my "
         "personal watchlist.\n"
         "- OMIT any section whose input is empty — no placeholder lines.\n"
@@ -662,7 +711,7 @@ def write_briefing(selected, briefed, model, caps, ed="morning"):
         '"top_link": the LINK of the story your Top line describes}. '
         "No text after the JSON."
     )
-    return ask_llm(prompt, max_tokens=5000, model=model)
+    return ask_llm(prompt, max_tokens=8000, model=model)
 
 
 def week_in_review(briefed, model):
